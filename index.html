@@ -1,0 +1,433 @@
+import React, { useState, useEffect } from 'react';
+
+// --- 虎之卷：考前教材資料 (從簡報萃取的核心重點) ---
+const tutorials = [
+  {
+    id: 1,
+    title: "第一課：資料的形狀與儲存",
+    icon: "🗂️",
+    content: [
+      "🐾 結構化資料 (乖寶寶)：固定欄位 (如訂單)。用 關聯式資料庫 (RDBMS)。",
+      "🐾 半結構化資料 (樹狀彈性)：有標籤但無固定欄位 (如 JSON/XML)。用 文件型資料庫 (Document)。",
+      "🐾 非結構化資料 (龐然大物)：影片、圖片、PDF。用 分散式檔案系統 (HDFS) 或 物件儲存 (Object Storage)。"
+    ]
+  },
+  {
+    id: 2,
+    title: "第二課：NoSQL 四大家族",
+    icon: "⚔️",
+    content: [
+      "🔥 Key-Value (鍵值型)：結構最簡單。超低延遲、快取、雙11搶購必備 (如 Redis)。",
+      "🔥 Document (文件型)：存 JSON、商品型錄，欄位常變也沒關係 (如 MongoDB)。",
+      "🔥 Graph (圖形型)：專門挖掘「人與人的連結」，社交網路、推薦系統 (如 Neo4j)。",
+      "🔥 Column-family (欄族型)：專為海量寫入設計，如 IoT 感測器、時間序列數據 (如 Cassandra)。"
+    ]
+  },
+  {
+    id: 3,
+    title: "第三課：HDFS 必考陷阱",
+    icon: "🐘",
+    content: [
+      "⚠️ 陷阱一：Secondary NameNode 絕對不是備援 (HA)！它只是幫大腦合併日誌的小弟。",
+      "⚠️ 陷阱二：HDFS 超怕「大量小檔案」，因為會塞爆 NameNode 的記憶體。",
+      "💡 強項：適合儲存超大檔案、批次處理、一次寫入多次讀取 (WORM)，不適合頻繁更新！"
+    ]
+  },
+  {
+    id: 4,
+    title: "第四課：資料湖 vs 資料倉儲",
+    icon: "🌊",
+    content: [
+      "💦 資料湖 (Data Lake)：什麼都吃 (原汁原味)。流程是 ELT (先載入再轉換)。讀取時才決定 Schema (Schema-on-read)。",
+      "🏢 資料倉儲 (Data Warehouse)：只存乾淨的結構化資料。流程是 ETL (先轉換再載入)。寫入前就要定好 Schema (Schema-on-write)。"
+    ]
+  },
+  {
+    id: 5,
+    title: "第五課：星型 vs 雪花架構",
+    icon: "❄️",
+    content: [
+      "⭐ 星型架構 (Star Schema)：查詢速度極快 (只需一次 JOIN)，但維度表資料重複，比較浪費空間。",
+      "❄️ 雪花架構 (Snowflake Schema)：將維度表高度正規化，最省空間！但查詢時要 JOIN 很多次，速度較慢。"
+    ]
+  },
+  {
+    id: 6,
+    title: "第六課：ACID 與 零信任",
+    icon: "🛡️",
+    content: [
+      "🔐 ACID 的 A (Atomicity 原子性)：交易不可分割，全有或全無 (轉帳不能只扣款不加錢)。",
+      "🚫 零信任 (Zero Trust)：Never trust, always verify. 打破防火牆迷思，不預設信任任何人設備，搭配最小權限。",
+      "🔑 ABAC vs RBAC：ABAC (依多種屬性如時間/設備動態給權限，極彈性但複雜)；RBAC (單純依角色給權限)。"
+    ]
+  }
+];
+
+// --- 測驗題庫資料 ---
+const questions = [
+  {
+    id: 1,
+    text: "小老虎遇到了一個需要「極高併發、超低延遲快取」的系統（像是雙11搶購），該幫牠選哪種資料庫？",
+    options: ["文件型 (Document)", "鍵值型 (Key-Value)", "圖形型 (Graph)", "欄族型 (Column-family)"],
+    correct: 1,
+    explanation: "快取/超低延遲的王者是 Key-Value Store (例如 Redis)。"
+  },
+  {
+    id: 2,
+    text: "大魔王設下了陷阱：HDFS 的 Secondary NameNode 到底負責什麼工作？",
+    options: ["NameNode壞掉時自動接手 (備援)", "負責儲存實際的資料區塊", "幫忙合併日誌 (FsImage與EditLog) 的小弟", "處理海量的小檔案"],
+    correct: 2,
+    explanation: "大陷阱！Secondary NameNode 絕對不是備援(HA)，它只是個幫忙合併日誌減輕負擔的小弟。"
+  },
+  {
+    id: 3,
+    text: "小老虎想追蹤森林裡的「動物社交網絡（誰認識誰）」，要選哪種 NoSQL 武器最適合？",
+    options: ["關聯式資料庫 (RDBMS)", "圖形資料庫 (Graph)", "文件型資料庫 (Document)", "物件儲存 (Object Storage)"],
+    correct: 1,
+    explanation: "處理「關係/連結/路徑/推薦」問題，首選圖形資料庫 (如 Neo4j)。"
+  },
+  {
+    id: 4,
+    text: "進入「資料湖 (Data Lake)」時，最常搭配的資料處理流程是什麼？",
+    options: ["ETL (先轉換再載入)", "ELT (先載入再轉換)", "ACID", "WORM"],
+    correct: 1,
+    explanation: "資料湖(Data Lake)什麼都吃，原汁原味先放進去，所以是 ELT (Extract, Load, Transform)。"
+  },
+  {
+    id: 5,
+    text: "小老虎在資料倉儲發現了兩種架構，哪一種「查詢速度最快，但比較浪費儲存空間」？",
+    options: ["星型架構 (Star Schema)", "雪花架構 (Snowflake Schema)", "網狀架構", "樹狀架構"],
+    correct: 0,
+    explanation: "星型架構只需做一次 JOIN 就能拿到資訊，速度快但佔空間；雪花架構高度正規化，省空間但查得慢。"
+  },
+  {
+    id: 6,
+    text: "要攻擊 HDFS 系統，它的「最大死穴」是什麼？",
+    options: ["超大檔案", "批次處理", "大量 KB 級別的小檔案", "一次寫入多次讀取 (WORM)"],
+    correct: 2,
+    explanation: "HDFS 超級怕大量小檔案！因為每個檔案的 Metadata 都會塞爆 NameNode 的記憶體。"
+  },
+  {
+    id: 7,
+    text: "交易系統的守護神 ACID 中，A (Atomicity 原子性) 代表什麼意思？",
+    options: ["全有或全無，不可分割", "資料庫邏輯一致", "多筆交易互不干擾", "停電資料也不能不見"],
+    correct: 0,
+    explanation: "Atomicity (原子性) 代表交易步驟綁成一個單位，要嘛全部成功，要嘛全部不執行復原。"
+  },
+  {
+    id: 8,
+    text: "進入最高機密區！「零信任架構 (Zero Trust)」的核心精神是什麼？",
+    options: ["防火牆內就是絕對安全", "不預設信任任何人或設備，持續驗證", "給予所有員工最大權限", "使用密碼就足夠了"],
+    correct: 1,
+    explanation: "Never trust, always verify. 打破傳統邊界防護，永遠不預設信任並搭配最小權限原則。"
+  },
+  {
+    id: 9,
+    text: "小老虎要設定權限，哪一種控制方式是「依照多種屬性（如職位+時間+設備）動態判定」，超彈性但設定複雜？",
+    options: ["RBAC (以角色為基礎)", "ABAC (以屬性為基礎)", "MAC (強制存取控制)", "DAC (任意存取控制)"],
+    correct: 1,
+    explanation: "ABAC (Attribute-Based Access Control) 使用多種屬性動態判定；而 RBAC 只是看「角色」。"
+  },
+  {
+    id: 10,
+    text: "商品型錄的「欄位不固定，層次分明像 JSON」，小老虎該把它存進哪裡？",
+    options: ["關聯式資料庫 (RDBMS)", "文件型資料庫 (Document Database)", "HDFS", "資料倉儲 (Data Warehouse)"],
+    correct: 1,
+    explanation: "半結構化資料（如 JSON/XML），具備彈性 Schema，最適合 Document Database (如 MongoDB)。"
+  }
+];
+
+export default function TigerGame() {
+  const [gameState, setGameState] = useState('start'); // start, tutorial, playing, result, end
+  const [currentQIndex, setCurrentQIndex] = useState(0);
+  const [currentTutorialIndex, setCurrentTutorialIndex] = useState(0);
+  const [score, setScore] = useState(0);
+  const [hp, setHp] = useState(3);
+  const [tigerEmotion, setTigerEmotion] = useState('🐯'); // 🐯, 😻, 😿, 😼, 🤓
+  const [feedback, setFeedback] = useState(null);
+
+  const [shuffledQuestions, setShuffledQuestions] = useState([]);
+
+  // 初始化遊戲
+  const initGame = () => {
+    const shuffled = [...questions].sort(() => Math.random() - 0.5);
+    setShuffledQuestions(shuffled);
+    setCurrentQIndex(0);
+    setScore(0);
+    setHp(3);
+    setTigerEmotion('🐯');
+    setGameState('playing');
+  };
+
+  const handleAnswer = (selectedIndex) => {
+    const currentQuestion = shuffledQuestions[currentQIndex];
+    const isCorrect = selectedIndex === currentQuestion.correct;
+
+    if (isCorrect) {
+      setScore(prev => prev + 10);
+      setTigerEmotion('😻');
+      setFeedback({
+        isCorrect: true,
+        msg: "嗷嗚～答對了！吃了一口大肉肉 🍖",
+        explanation: currentQuestion.explanation
+      });
+    } else {
+      setHp(prev => prev - 1);
+      setTigerEmotion('😿');
+      setFeedback({
+        isCorrect: false,
+        msg: "哎呀！被資料怪獸咬了一口 👾",
+        explanation: currentQuestion.explanation
+      });
+    }
+    setGameState('result');
+  };
+
+  const nextQuestion = () => {
+    if (hp <= 0) {
+      setGameState('end');
+      setTigerEmotion('😵');
+      return;
+    }
+    
+    if (currentQIndex + 1 < shuffledQuestions.length) {
+      setCurrentQIndex(prev => prev + 1);
+      setTigerEmotion('🐯');
+      setGameState('playing');
+      setFeedback(null);
+    } else {
+      setGameState('end');
+      setTigerEmotion('😎');
+    }
+  };
+
+  // --- UI Components ---
+
+  const StartScreen = () => (
+    <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-gradient-to-b from-orange-100 to-yellow-200 rounded-3xl shadow-xl">
+      <div className="text-8xl mb-4 animate-bounce">🐯</div>
+      <h1 className="text-3xl font-extrabold text-orange-600 mb-2">數據小老虎歷險記</h1>
+      <p className="text-gray-700 mb-8 font-medium">
+        L22202 數據儲存與管理<br/>跟著小老虎一起吸收知識，打敗考試魔王！
+      </p>
+      
+      <div className="flex flex-col sm:flex-row gap-4">
+        <button 
+          onClick={() => {
+            setCurrentTutorialIndex(0);
+            setTigerEmotion('🤓');
+            setGameState('tutorial');
+          }}
+          className="px-8 py-4 bg-teal-500 text-white font-bold rounded-full shadow-lg hover:bg-teal-600 hover:scale-105 transition-all active:scale-95"
+        >
+          📖 讀「虎之卷」教材
+        </button>
+        <button 
+          onClick={initGame}
+          className="px-8 py-4 bg-orange-500 text-white font-bold rounded-full shadow-lg hover:bg-orange-600 hover:scale-105 transition-all active:scale-95"
+        >
+          🚀 直接開始測驗
+        </button>
+      </div>
+    </div>
+  );
+
+  const TutorialScreen = () => {
+    const t = tutorials[currentTutorialIndex];
+    return (
+      <div className="flex flex-col h-full bg-teal-50 rounded-3xl shadow-xl p-4 md:p-8">
+        <div className="flex justify-between items-center mb-4">
+          <button 
+            onClick={() => setGameState('start')}
+            className="text-teal-600 font-bold hover:text-teal-800"
+          >
+            ← 返回首頁
+          </button>
+          <div className="font-bold text-teal-600 bg-white px-4 py-1 rounded-full shadow-sm">
+            進度 {currentTutorialIndex + 1} / {tutorials.length}
+          </div>
+        </div>
+
+        <div className="flex justify-center mb-2">
+          <div className="text-7xl">{tigerEmotion}</div>
+        </div>
+
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-md border-b-4 border-teal-300 flex-grow overflow-y-auto mb-6">
+          <h2 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-3 border-b-2 border-teal-100 pb-3">
+            <span className="text-4xl">{t.icon}</span>
+            {t.title}
+          </h2>
+          <div className="space-y-4">
+            {t.content.map((point, idx) => (
+              <p key={idx} className="text-lg text-gray-700 leading-relaxed font-medium bg-teal-50/50 p-3 rounded-lg">
+                {point}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-between gap-2">
+          <button
+            onClick={() => setCurrentTutorialIndex(prev => Math.max(0, prev - 1))}
+            disabled={currentTutorialIndex === 0}
+            className={`px-6 py-3 font-bold rounded-xl transition-all ${currentTutorialIndex === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white text-teal-600 shadow-sm hover:bg-teal-100'}`}
+          >
+            上一頁
+          </button>
+          
+          {currentTutorialIndex < tutorials.length - 1 ? (
+            <button
+              onClick={() => setCurrentTutorialIndex(prev => Math.min(tutorials.length - 1, prev + 1))}
+              className="px-6 py-3 bg-teal-500 text-white font-bold rounded-xl shadow-md hover:bg-teal-600 transition-all flex-grow text-center"
+            >
+              下一頁 ➡️
+            </button>
+          ) : (
+            <button
+              onClick={initGame}
+              className="px-6 py-3 bg-orange-500 text-white font-bold rounded-xl shadow-md hover:bg-orange-600 transition-all flex-grow text-center animate-pulse"
+            >
+              ⚔️ 我準備好測驗了！
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const PlayingScreen = () => {
+    const q = shuffledQuestions[currentQIndex];
+    return (
+      <div className="flex flex-col h-full bg-orange-50 rounded-3xl shadow-xl p-4 md:p-8">
+        <div className="flex justify-between items-center mb-6 bg-white p-3 rounded-2xl shadow-sm border-2 border-orange-200">
+          <div className="flex space-x-1 text-2xl">
+            {[...Array(3)].map((_, i) => (
+              <span key={i} className={i < hp ? 'opacity-100' : 'opacity-30 grayscale'}>❤️</span>
+            ))}
+          </div>
+          <div className="font-bold text-orange-600 text-xl">
+            🍖 積分: {score}
+          </div>
+        </div>
+
+        <div className="flex justify-center mb-6">
+          <div className="text-8xl transition-all duration-300 hover:scale-110 cursor-pointer">
+            {tigerEmotion}
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-md border-b-4 border-orange-300 mb-6 flex-grow flex flex-col justify-center">
+          <div className="text-sm text-orange-400 font-bold mb-2">挑戰關卡 {currentQIndex + 1} / {questions.length}</div>
+          <h2 className="text-xl font-bold text-gray-800 leading-relaxed">
+            {q.text}
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {q.options.map((opt, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleAnswer(idx)}
+              className="p-4 bg-yellow-50 hover:bg-orange-100 border-2 border-orange-200 rounded-xl text-left font-bold text-gray-700 transition-all hover:-translate-y-1 hover:shadow-md active:translate-y-0"
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const ResultScreen = () => (
+    <div className={`flex flex-col h-full rounded-3xl shadow-xl p-6 md:p-8 text-center justify-center transition-all ${feedback.isCorrect ? 'bg-green-50 border-4 border-green-200' : 'bg-red-50 border-4 border-red-200'}`}>
+      <div className="text-9xl mb-6 animate-pulse">{tigerEmotion}</div>
+      
+      <h2 className={`text-3xl font-extrabold mb-4 ${feedback.isCorrect ? 'text-green-600' : 'text-red-500'}`}>
+        {feedback.msg}
+      </h2>
+      
+      <div className="bg-white p-6 rounded-2xl shadow-sm mb-8 text-left">
+        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-2">🐾 知識點解析</h3>
+        <p className="text-lg font-medium text-gray-800 leading-relaxed">
+          {feedback.explanation}
+        </p>
+      </div>
+
+      <button 
+        onClick={nextQuestion}
+        className={`px-8 py-4 font-bold rounded-full shadow-md text-white transition-all hover:scale-105 active:scale-95 ${feedback.isCorrect ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}
+      >
+        {hp <= 0 ? '遊戲結束 😿' : (currentQIndex + 1 === questions.length ? '查看成績 🏆' : '繼續前進 🐾')}
+      </button>
+    </div>
+  );
+
+  const EndScreen = () => {
+    const isWin = hp > 0;
+    const isPerfect = score === questions.length * 10;
+    
+    let endMessage = "";
+    let endMascot = "";
+    
+    if (isPerfect) {
+      endMessage = "滿分通關！你已經是數據庫大師了！";
+      endMascot = "👑🐯👑";
+    } else if (isWin) {
+      endMessage = "恭喜通關！大部分的知識點都掌握囉！";
+      endMascot = "🎉🐯🎉";
+    } else {
+      endMessage = "被陷阱打敗了...沒關係，再讀一次虎之卷吧！";
+      endMascot = "🩹😿🩹";
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-gradient-to-b from-orange-200 to-yellow-300 rounded-3xl shadow-xl">
+        <div className="text-8xl mb-6">{endMascot}</div>
+        <h1 className="text-4xl font-extrabold text-orange-700 mb-2">冒險結束</h1>
+        <p className="text-xl font-bold text-gray-800 mb-6">{endMessage}</p>
+        
+        <div className="bg-white/80 p-6 rounded-2xl shadow-sm mb-8 w-full max-w-sm">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-gray-600 font-bold">總獲得肉肉:</span>
+            <span className="text-2xl font-black text-orange-600">{score} 分</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-600 font-bold">剩餘生命值:</span>
+            <span className="text-xl">{[...Array(hp)].map((_, i) => '❤️').join('') || '💔'}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm justify-center">
+           <button 
+            onClick={() => {
+              setCurrentTutorialIndex(0);
+              setTigerEmotion('🤓');
+              setGameState('tutorial');
+            }}
+            className="px-6 py-3 bg-teal-500 text-white font-bold rounded-full shadow-md hover:bg-teal-600 transition-all"
+          >
+            📖 複習教材
+          </button>
+          <button 
+            onClick={() => setGameState('start')}
+            className="px-6 py-3 bg-orange-600 text-white font-bold rounded-full shadow-md hover:bg-orange-700 transition-all"
+          >
+            🏠 回首頁
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-2xl h-[700px] bg-white rounded-3xl shadow-2xl p-2 relative overflow-hidden">
+        {gameState === 'start' && <StartScreen />}
+        {gameState === 'tutorial' && <TutorialScreen />}
+        {gameState === 'playing' && <PlayingScreen />}
+        {gameState === 'result' && <ResultScreen />}
+        {gameState === 'end' && <EndScreen />}
+      </div>
+    </div>
+  );
+}
